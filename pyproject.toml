@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "booz_xform_jax"
+version = "0.1.0"
+description = "Pure Python JAX implementation of the Boozer coordinate transformation"
+readme = "README.md"
+authors = [
+  { name = "Hidden Symmetries Development Team", email = "dev@example.com" }
+]
+license = { text = "MIT" }
+dependencies = [
+  # JAX and its runtime
+  "jax",
+  "jaxlib",
+  # Base numerical dependency
+  "numpy >= 1.20",
+  # NetCDF support for reading and writing boozmn files
+  "netCDF4 >= 1.5.0",
+  # SciPy provides a fallback NetCDF3 writer
+  "scipy >= 1.7",
+  # Matplotlib and Plotly are required for plotting utilities
+  "matplotlib >= 3.5",
+  "plotly >= 5.6",
+]
+requires-python = ">=3.8"
+
+[project.urls]
+Homepage = "https://github.com/hiddenSymmetries/booz_xform"
+Repository = "https://github.com/hiddenSymmetries/booz_xform"
+
+[tool.setuptools.packages.find]
+where = ["src"]
