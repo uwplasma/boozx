@@ -63,9 +63,9 @@ bx.run()
 print(bx.bmnc_b.shape)  # (mnboz, number of computed surfaces)
 ```
 
-This example glosses over many details—see the docstrings in
-`booz_xform_jax/booz_xform.py` for a full description of the inputs and
-outputs.  The API has been kept intentionally close to that of the
+This example glosses over many details—see the docstrings in the
+:mod:`booz_xform_jax.core` module for a full description of the inputs
+and outputs.  The API has been kept intentionally close to that of the
 original C++ implementation so that existing code can be ported with
 minimal changes.
 

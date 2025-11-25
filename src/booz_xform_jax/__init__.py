@@ -7,7 +7,11 @@ automatic differentiation.  See the documentation in
 ``booz_xform_jax.booz_xform`` for more details.
 """
 
-from .booz_xform import BoozXform
+# Re-export the BoozXform class from the core module.  This alias
+# maintains backwards compatibility with earlier versions that
+# defined BoozXform in the top-level ``booz_xform`` module.  Users
+# should import BoozXform from ``booz_xform_jax`` directly.
+from .core import BoozXform
 from .plots import surfplot, symplot, modeplot, wireplot
 
 # Version is defined here for convenience.  It must match the value in

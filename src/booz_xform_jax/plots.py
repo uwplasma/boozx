@@ -37,7 +37,9 @@ try:
 except ImportError as e:
     plt = None  # type: ignore
 
-from .booz_xform import BoozXform
+# Import the BoozXform class from the core module.  This import is
+# deferred to support the modular structure of the package.
+from .core import BoozXform
 
 
 def handle_b_input(b: str | BoozXform) -> BoozXform:
