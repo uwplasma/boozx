@@ -429,19 +429,6 @@ def read_wout(self, filename: str, flux: bool = False) -> None:
     # will extract the last value later; otherwise it remains zero.
     # Extract iotas before closing the dataset; shape (ns,)
     iotas = _np.asarray(ds.variables['iotas'][:])
-    # Print verbose output to know all shapes, surfaces, etc.
-    print(f"read_wout: ns = {ns}, asymmetry flag = {self.asym}")
-    print(f"  mnmax = {self.mnmax}, mnmax_nyq = {self.mnmax_nyq}")
-    print(f"  rmnc0 shape: {rmnc0.shape}")
-    print(f"  bmnc0 shape: {bmnc0.shape}")
-    print(f"  bsubumnc0 shape: {bsubumnc0.shape}")
-    print(f"  bsubvmnc0 shape: {bsubvmnc0.shape}")
-    print(f"  nfp = {self.nfp}, mpol = {self.mpol}, ntor = {self.ntor}")
-    print(f"  mpol_nyq = {self.mpol_nyq}, ntor_nyq = {self.ntor_nyq}")
-    print(f"  iotas shape: {iotas.shape}")
-    print(f"  flux arrays read: {flux and (phip0 is not None and chi0 is not None and pres0 is not None and phi0 is not None)}")
-    print(f"  aspect ratio: {aspect0}")
-    print(f"  for the file, vmec has {self.ns_vmec} surfaces")
     # Close dataset
     if use_scipy:
         ds.close()
