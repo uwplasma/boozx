@@ -117,17 +117,7 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     self.ns_in = ns_in
     # Store iota values as JAX array (drop axis)
     self.iota = jnp.asarray(iotas[1:], dtype=jnp.float64)
-    # Determine s_in: if provided, validate length; else generate uniform grid
-    if s_in is not None:
-        s_in_arr = _np.asarray(s_in)
-        if s_in_arr.shape[0] != ns_full:
-            raise ValueError("s_in must have the same length as iotas/ns")
-        # Store as numpy array to allow Python list indexing
-        self.s_in = _np.asarray(s_in_arr[1:], dtype=float)
-    else:
-        # Generate a default uniform grid on [0, 1]
-        s_uniform = _np.linspace(0.0, 1.0, ns_full)
-        self.s_in = _np.asarray(s_uniform[1:], dtype=float)
+
     # Helper to strip the axis from 2D arrays and convert to JAX.
     # VMEC stores these as (ns_full, mnmax). We want (mnmax, ns_in)
     # internally, with the axis (s=0) removed.
@@ -173,15 +163,119 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     # SECOND dimension, not the first.
     self.mnmax = rmnc0.shape[1]
 
-    # Copy non-Nyquist arrays, stripping axis and transposing to
-    # (mnmax, ns_in) for use in core.run.
-    self.rmnc = strip_axis(rmnc0, ns_full)
-    self.zmns = strip_axis(zmns0, ns_full)
-    self.lmns = strip_axis(lmns0, ns_full)
-    if self.asym:
-        self.rmns = strip_axis(rmns0, ns_full)
-        self.zmnc = strip_axis(zmnc0, ns_full)
-        self.lmnc = strip_axis(lmnc0, ns_full)
+    mnmax = self.mnmax
+    asym = self.asym
+    xm = _np.asarray(self.xm, dtype=int)  # needs self.xm set from read_wout
+
+    # --- Build full and half s grids like C++ ---
+    if s_in is not None:
+        # Treat s_in as the full-grid toroidal-flux coordinate, like VMEC
+        s_full = _np.asarray(s_in, dtype=float)
+        if s_full.shape[0] != ns_full:
+            raise ValueError("s_in must have length ns (full grid including axis)")
+    else:
+        hs = 1.0 / (ns_full - 1.0)
+        s_full = hs * _np.arange(ns_full)
+
+    sqrt_s_full = _np.sqrt(s_full)
+    sqrt_s_full[0] = 1.0  # avoid div-by-zero; rmnc(s=0)=0 for m>1 anyway
+
+    # Half grid: midpoints between full-grid points
+    s_half = 0.5 * (s_full[:-1] + s_full[1:])
+    sqrt_s_half = _np.sqrt(s_half)
+
+    # Store half-grid s_in (this is what C++ uses internally)
+    self.s_in = s_half.astype(float)
+    self.ns_in = ns_in
+
+    # --- Radial interpolation for R, Z, lambda on half grid: rmnc, zmns (+ asym parts) ---
+    # rmnc0, zmns0, rmns0, zmnc0, lmns0, lmnc0 currently have shape (ns_full, mnmax)
+    rmnc_half = _np.empty((mnmax, ns_in), dtype=float)
+    zmns_half = _np.empty((mnmax, ns_in), dtype=float)
+    lmns_half = _np.empty((mnmax, ns_in), dtype=float)
+    if asym:
+        rmns_half = _np.empty((mnmax, ns_in), dtype=float)
+        zmnc_half = _np.empty((mnmax, ns_in), dtype=float)
+        lmnc_half = _np.empty((mnmax, ns_in), dtype=float)
+    else:
+        rmns_half = zmnc_half = lmnc_half = None
+
+    for j in range(mnmax):
+        m_mode = int(xm[j])
+        if m_mode % 2 == 0:
+            # Even m: simple average in s
+            rmnc_half[j, :] = 0.5 * (rmnc0[:-1, j] + rmnc0[1:, j])
+            zmns_half[j, :] = 0.5 * (zmns0[:-1, j] + zmns0[1:, j])
+            lmns_half[j, :] = 0.5 * (lmns0[:-1, j] + lmns0[1:, j])
+            if asym:
+                rmns_half[j, :] = 0.5 * (rmns0[:-1, j] + rmns0[1:, j])
+                zmnc_half[j, :] = 0.5 * (zmnc0[:-1, j] + zmnc0[1:, j])
+                lmnc_half[j, :] = 0.5 * (lmnc0[:-1, j] + lmnc0[1:, j])
+        else:
+            # Odd m: interpolate f/sqrt(s) then multiply by sqrt(s_half)
+            rmnc_half[j, :] = 0.5 * (
+                rmnc0[:-1, j] / sqrt_s_full[:-1] +
+                rmnc0[1:,  j] / sqrt_s_full[1:]
+            ) * sqrt_s_half[:]
+            zmns_half[j, :] = 0.5 * (
+                zmns0[:-1, j] / sqrt_s_full[:-1] +
+                zmns0[1:,  j] / sqrt_s_full[1:]
+            ) * sqrt_s_half[:]
+            lmns_half[j, :] = 0.5 * (
+                lmns0[:-1, j] / sqrt_s_full[:-1] +
+                lmns0[1:,  j] / sqrt_s_full[1:]
+            ) * sqrt_s_half[:]
+            if asym:
+                rmns_half[j, :] = 0.5 * (
+                    rmns0[:-1, j] / sqrt_s_full[:-1] +
+                    rmns0[1:,  j] / sqrt_s_full[1:]
+                ) * sqrt_s_half[:]
+                zmnc_half[j, :] = 0.5 * (
+                    zmnc0[:-1, j] / sqrt_s_full[:-1] +
+                    zmnc0[1:,  j] / sqrt_s_full[1:]
+                ) * sqrt_s_half[:]
+                lmnc_half[j, :] = 0.5 * (
+                    lmnc0[:-1, j] / sqrt_s_full[:-1] +
+                    lmnc0[1:,  j] / sqrt_s_full[1:]
+                ) * sqrt_s_half[:]
+
+            if m_mode == 1:
+                # Special extrapolation for m=1 at the inner half-grid point
+                rmnc_half[j, 0] = (
+                    1.5 * rmnc0[1, j] / sqrt_s_full[1]
+                    - 0.5 * rmnc0[2, j] / sqrt_s_full[2]
+                ) * sqrt_s_half[0]
+                zmns_half[j, 0] = (
+                    1.5 * zmns0[1, j] / sqrt_s_full[1]
+                    - 0.5 * zmns0[2, j] / sqrt_s_full[2]
+                ) * sqrt_s_half[0]
+                lmns_half[j, 0] = (
+                    1.5 * lmns0[1, j] / sqrt_s_full[1]
+                    - 0.5 * lmns0[2, j] / sqrt_s_full[2]
+                ) * sqrt_s_half[0]
+                if asym:
+                    rmns_half[j, 0] = (
+                        1.5 * rmns0[1, j] / sqrt_s_full[1]
+                        - 0.5 * rmns0[2, j] / sqrt_s_full[2]
+                    ) * sqrt_s_half[0]
+                    zmnc_half[j, 0] = (
+                        1.5 * zmnc0[1, j] / sqrt_s_full[1]
+                        - 0.5 * zmnc0[2, j] / sqrt_s_full[2]
+                    ) * sqrt_s_half[0]
+                    lmnc_half[j, 0] = (
+                        1.5 * lmnc0[1, j] / sqrt_s_full[1]
+                        - 0.5 * lmnc0[2, j] / sqrt_s_full[2]
+                    ) * sqrt_s_half[0]
+
+    # Now store these in the same orientation as the C++ internal rmnc(jmn, js)
+    # i.e. (mnmax, ns_in) as JAX arrays:
+    self.rmnc = jnp.asarray(rmnc_half, dtype=jnp.float64)
+    self.zmns = jnp.asarray(zmns_half, dtype=jnp.float64)
+    self.lmns = jnp.asarray(lmns_half, dtype=jnp.float64)
+    if asym:
+        self.rmns = jnp.asarray(rmns_half, dtype=jnp.float64)
+        self.zmnc = jnp.asarray(zmnc_half, dtype=jnp.float64)
+        self.lmnc = jnp.asarray(lmnc_half, dtype=jnp.float64)
     else:
         self.rmns = None
         self.zmnc = None
@@ -217,11 +311,31 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     self.Boozer_G_all = _np.asarray(self.bsubvmnc[0, :])
     # Check for flux arrays
     if len(arrays) == 16:
-        phip0, chi0, pres0, phi0 = arrays[12:16]
-        self.phip = jnp.asarray(_np.asarray(phip0)[1:], dtype=jnp.float64)
-        self.chi = jnp.asarray(_np.asarray(chi0)[1:], dtype=jnp.float64)
-        self.pres = jnp.asarray(_np.asarray(pres0)[1:], dtype=jnp.float64)
-        self.phi = jnp.asarray(_np.asarray(phi0)[1:], dtype=jnp.float64)
+        phip0, chi0, pres0, phi0 = ( _np.asarray(a) for a in arrays[12:16] )
+        ns_full = phip0.shape[0]
+        ns_in = ns_full - 1
+        two_pi = 2.0 * _np.pi
+
+        # Match C++ sizes and scaling
+        phip = _np.empty(ns_in + 1, dtype=float)
+        chi  = _np.empty(ns_in + 1, dtype=float)
+        pres = _np.empty(ns_in + 1, dtype=float)
+        phi  = _np.empty(ns_in + 1, dtype=float)
+
+        for j in range(ns_in + 1):
+            phip[j] = -phip0[j] / two_pi
+            chi[j]  = chi0[j]
+            pres[j] = pres0[j]
+            phi[j]  = phi0[j]
+
+        self.phip = jnp.asarray(phip, dtype=jnp.float64)
+        self.chi  = jnp.asarray(chi,  dtype=jnp.float64)
+        self.pres = jnp.asarray(pres, dtype=jnp.float64)
+        self.phi  = jnp.asarray(phi,  dtype=jnp.float64)
+        self.toroidal_flux = float(phi[ns_full - 1])
+    else:
+        self.phip = self.chi = self.pres = self.phi = None
+        self.toroidal_flux = 0.0
     # Set default compute_surfs if not already set
     if self.compute_surfs is None:
         self.compute_surfs = list(range(ns_in))
@@ -347,7 +461,7 @@ def read_wout(self, filename: str, flux: bool = False) -> None:
     print(f"  iotas shape: {iotas.shape}")
     print(f"  flux arrays read: {flux and (phip0 is not None and chi0 is not None and pres0 is not None and phi0 is not None)}")
     print(f"  aspect ratio: {aspect0}")
-    print(f"  for the test, vmec has {self.ns_vmec} surfaces")
+    print(f"  for the file, vmec has {self.ns_vmec} surfaces")
     # Close dataset
     if use_scipy:
         ds.close()
@@ -377,10 +491,5 @@ def read_wout(self, filename: str, flux: bool = False) -> None:
     init_from_vmec(self, *args)
     # Set aspect ratio from stored value
     self.aspect = aspect0
-    # The last value of phi corresponds to total toroidal flux (not divided by 2π)
-    if phi0 is not None:
-        try:
-            self.toroidal_flux = float(phi0[-1])
-        except Exception:
-            self.toroidal_flux = 0.0
+
     return None

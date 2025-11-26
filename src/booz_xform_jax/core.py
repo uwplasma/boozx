@@ -563,6 +563,7 @@ class BoozXform:
             # vcoords_rz part: R, Z, lambda and derivatives (non-Nyquist)
             # ---------------------------
             mnmax_non = int(self.mnmax)
+            # print(f"  zmns.shape={self.zmns.shape if self.zmns is not None else None}")
             this_rmnc = self.rmnc[:, js]
             this_zmns = self.zmns[:, js]
             this_lmns = self.lmns[:, js]
@@ -712,6 +713,16 @@ class BoozXform:
                     zmnc_b[jmn, js_b] += float(jnp.sum(tcos * z))
                     numnc_b[jmn, js_b] += float(jnp.sum(tcos * nu))
                     gmns_b[jmn, js_b] += float(jnp.sum(tsin * boozer_jac))
+
+            print(f"Processing surface {js} (js_b={js_b}): mnmax_non={mnmax_non}, mnmax_nyq={mnmax_nyq}" + 
+                  ", Boozer I = {Boozer_I[js_b]}, G = {Boozer_G[js_b]}, grid size: ntheta={ntheta}, nzeta={nzeta}" +
+                  f", n_theta_zeta={n_theta_zeta}, wmns[1:3]={wmns[1:3]}, lmns.shape={self.lmns.shape if self.lmns is not None else None}" +
+                  f"  rmnc.shape={self.rmnc.shape if self.rmnc is not None else None}"+
+                  f"  bmnc.shape={self.bmnc.shape if self.bmnc is not None else None}"+
+                  f"  bmod[1:3]={bmod[1:3]}, nu[1:3]={nu[1:3]}"
+                  f"  theta_B[1:3]={theta_B[1:3]}, zeta_B[1:3]={zeta_B[1:3]}"
+                  f"  dB_dvmec[1:3]={dB_dvmec[1:3]}, fourier_factor={fourier_factor}"
+            )
 
         # Store results on the instance:
         self.bmnc_b = bmnc_b

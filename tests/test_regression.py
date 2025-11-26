@@ -69,7 +69,7 @@ class RegressionTest(unittest.TestCase):
                     # Check maximum difference for debugging
                     diff = np.max(np.abs(arr_ref - sign * arr_new))
                     print(f'max absolute diff in {var}:', diff)
-                    np.testing.assert_allclose(arr_ref, sign * arr_new, rtol=rtol, atol=atol)
+                    np.testing.assert_allclose(sign * arr_new, arr_ref, rtol=rtol, atol=atol)
                 # Compare select variables written to boozmn files
                 boozmn_new_filename = os.path.join(TEST_DIR, f'boozmn_new_{config}.nc')
                 b.write_boozmn(boozmn_new_filename)
@@ -87,7 +87,7 @@ class RegressionTest(unittest.TestCase):
                     arr_new = f2.variables[var][:]
                     diff = np.max(np.abs(arr_ref - arr_new))
                     print(f'max absolute diff in {var}:', diff)
-                    np.testing.assert_allclose(arr_ref, arr_new, rtol=rtol, atol=atol)
+                    np.testing.assert_allclose(arr_new, arr_ref, rtol=rtol, atol=atol)
                 # Clean up temporary file
                 f2.close()
                 os.remove(boozmn_new_filename)
