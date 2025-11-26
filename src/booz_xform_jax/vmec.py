@@ -304,10 +304,14 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
             pres[j] = pres0[j]
             phi[j]  = phi0[j]
 
-        self.phip = jnp.asarray(phip, dtype=jnp.float64)
-        self.chi  = jnp.asarray(chi,  dtype=jnp.float64)
-        self.pres = jnp.asarray(pres, dtype=jnp.float64)
-        self.phi  = jnp.asarray(phi,  dtype=jnp.float64)
+        # Store flux profiles on the half grid (drop the axis), to be consistent
+        # with iota, rmnc, etc., which all live on ns_in surfaces.
+        self.phip = jnp.asarray(phip[1:], dtype=jnp.float64)  # length ns_in
+        self.chi  = jnp.asarray(chi[1:],  dtype=jnp.float64)
+        self.pres = jnp.asarray(pres[1:], dtype=jnp.float64)
+        self.phi  = jnp.asarray(phi[1:],  dtype=jnp.float64)
+
+        # Toroidal flux: keep the full-grid last value (outer surface)
         self.toroidal_flux = float(phi[ns_full - 1])
     else:
         self.phip = self.chi = self.pres = self.phi = None

@@ -367,24 +367,30 @@ class BoozXform:
         # Ensure mboz and nboz are set
         if self.mboz is None or self.nboz is None:
             raise RuntimeError("mboz and nboz must be set before setting up grids")
-        # C++ uses ntheta=2*(2*mboz+1), nzeta=2*(2*nboz+1) (nzeta=1 if nboz==0)
-        ntheta = 2 * (2 * self.mboz + 1)
-        nzeta  = 2 * (2 * self.nboz + 1) if self.nboz > 0 else 1
-        # Uniform grids on [0,2π)
-        theta_1d = jnp.linspace(0.0, 2.0*jnp.pi, ntheta, endpoint=False)
-        zeta_1d  = jnp.linspace(0.0, 2.0*jnp.pi, nzeta, endpoint=False)
-        # Flattened tensor-product grid:
-        # theta index varies slowest, zeta varies fastest:
-        self._theta_grid = jnp.repeat(theta_1d, nzeta)
-        self._zeta_grid  = jnp.tile(zeta_1d, ntheta)
-        self._ntheta = int(ntheta)
-        self._nzeta  = int(nzeta)
-        self._n_theta_zeta = int(ntheta * nzeta)
-        # nu2_b is the half-grid index used in the C++ code for
-        # symmetric cases (theta = π).  Stored as 1-based index there;
-        # we keep the same convention and convert to 0-based when needed.
-        self._nu2_b = self._ntheta//2 + 1
-        self._prepared = True
+
+        ntheta_full = 2 * (2 * self.mboz + 1)
+        nzeta_full  = 2 * (2 * self.nboz + 1) if self.nboz > 0 else 1
+        nu2_b       = ntheta_full // 2 + 1
+
+        if self.asym:
+            nu3_b = ntheta_full
+        else:
+            nu3_b = nu2_b
+
+        d_theta = (2.0 * jnp.pi) / ntheta_full
+        d_zeta  = (2.0 * jnp.pi) / (self.nfp * nzeta_full)
+
+        theta_vals = jnp.arange(nu3_b) * d_theta
+        zeta_vals  = jnp.arange(nzeta_full) * d_zeta
+
+        self._theta_grid = jnp.repeat(theta_vals, nzeta_full)
+        self._zeta_grid  = jnp.tile(zeta_vals, nu3_b)
+
+        self._ntheta         = int(ntheta_full)
+        self._nzeta          = int(nzeta_full)
+        self._n_theta_zeta   = int(nu3_b * nzeta_full)
+        self._nu2_b          = nu2_b
+        self._prepared       = True
 
     # ------------------------------------------------------------------
     def run(self) -> None:
@@ -428,24 +434,19 @@ class BoozXform:
         # Ensure Boozer mode lists (xm_b, xn_b, mnboz) are prepared.
         # Use VMEC resolution as default if user did not set mboz/nboz.
         # ------------------------------------------------------------------
+        # Default Boozer resolution if not set by user
         if self.mboz is None:
-            if self.mpol is None or self.mpol == 0:
-                raise RuntimeError(
-                    "mboz is not set and mpol is zero; did you call read_wout/init_from_vmec?"
-                )
+            if self.mpol is None:
+                raise RuntimeError("mboz is not set and mpol is not available")
             self.mboz = int(self.mpol)
-
         if self.nboz is None:
-            if self.ntor is None or self.ntor == 0:
-                raise RuntimeError(
-                    "nboz is not set and ntor is zero; did you call read_wout/init_from_vmec?"
-                )
-            self.nboz = int(self.ntor)
-
+            if self.ntor is None:
+                raise RuntimeError("nboz is not set and ntor is not available")
+            self.nboz = int(self.ntor)  # allow nboz = 0 when ntor = 0
+        # Prepare mode lists
         if self.mnboz is None or self.xm_b is None or self.xn_b is None:
             self._prepare_mode_lists()
-
-        # Prepare grid and basic bookkeeping:
+        # Set up grids
         self._setup_grids()
         ntheta = self._ntheta
         nzeta = self._nzeta
@@ -638,8 +639,8 @@ class BoozXform:
             # Symmetric θ integration factor (only half-circle in θ):
             # Apply the ½ factor for theta=0 and theta=π rows:
             if not self.asym:
-                idx0   = jnp.arange(0, nzeta)                   # first poloidal row
-                idx_pi = jnp.arange(nzeta*(nu2_b-1), nzeta*nu2_b)
+                idx0   = jnp.arange(0, self._nzeta)                        # θ=0 row
+                idx_pi = jnp.arange(self._nzeta*(self._nu2_b - 1), self._nzeta*self._nu2_b)  # θ=π row
                 for m in range(self.mboz+1):
                     cosm_b = cosm_b.at[idx0, m].set(cosm_b[idx0, m] * 0.5)
                     sinm_b = sinm_b.at[idx0, m].set(sinm_b[idx0, m] * 0.5)
@@ -654,10 +655,10 @@ class BoozXform:
             # ---------------------------
             if self.asym:
                 # asymmetric case: integrate over the full domain
-                fourier_factor0 = 2.0 / (ntheta * nzeta)
+                fourier_factor0 = 2.0 / (self._ntheta * self._nzeta)
             else:
                 # symmetric case: integrate over half the domain
-                fourier_factor0 = 2.0 / ((nu2_b - 1) * nzeta)
+                fourier_factor0 = 2.0 / ((self._nu2_b - 1) * self._nzeta)
                 # m=0 mode needs an extra factor of ½:
                 # this is handled by multiplying fourier_factor by ½ for jmn==0
 

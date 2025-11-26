@@ -121,6 +121,8 @@ def write_boozmn(self, filename: str) -> None:
     put_scalar('nboz_b', int(self.nboz))
     put_scalar('mnboz_b', int(self.mnboz))
     put_scalar('aspect_b', float(self.aspect))
+    # Store toroidal flux for round-trip consistency
+    put_scalar('toroidal_flux_b', float(self.toroidal_flux))
     # Write 1D arrays
     if using_netcdf4:
         ds.createVariable('jlist', 'i4', ('comput_surfs',))[:] = jlist
@@ -194,6 +196,11 @@ def read_boozmn(self, filename: str) -> None:
         self.nfp = int(ds.variables['nfp_b'][...].item())
         self.mboz = int(ds.variables['mboz_b'][...].item())
         self.nboz = int(ds.variables['nboz_b'][...].item())
+        # Toroidal flux (if present – older files may not have it)
+        if 'toroidal_flux_b' in ds.variables:
+            self.toroidal_flux = float(ds.variables['toroidal_flux_b'][...].item())
+        else:
+            self.toroidal_flux = 0.0
         # Indices of selected surfaces (convert from 1-based jlist)
         self.compute_surfs = [int(j) - 2 for j in ds.variables['jlist'][:]]
         # Mode lists
