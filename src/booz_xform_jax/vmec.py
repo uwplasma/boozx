@@ -130,9 +130,9 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
         self.s_in = _np.asarray(s_uniform[1:], dtype=float)
     # Helper to strip the axis from 2D arrays and convert to JAX
     def strip_axis(arr: _np.ndarray, ncols: int) -> jnp.ndarray:
-        if arr.ndim != 2 or arr.shape[1] != ncols:
-            raise ValueError("Input array has wrong shape: expected (mnmax, ns)")
-        return jnp.asarray(arr[:, 1:], dtype=jnp.float64)
+        if arr.ndim != 2 or arr.shape[0] != ncols:
+            raise ValueError(f"strip_axis: input array has wrong shape: expected array.shape[0] == ncols={ncols} got {arr.shape[0]}")
+        return jnp.asarray(arr[1:, :], dtype=jnp.float64)
     # Unpack mandatory arrays: order rmnc, rmns, zmnc, zmns, lmnc, lmns, bmnc, bmns,
     # bsubumnc, bsubumns, bsubvmnc, bsubvmns.  Use parentheses to span lines.
     (
@@ -167,11 +167,6 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     # Nyquist arrays have shape (mnmax_nyq, ns_full)
     self.mnmax_nyq = bmnc0.shape[0]
     # Copy non-Nyquist arrays, stripping axis
-    print(f"Initializing BoozXform with {ns_in} surfaces (excluding axis)")
-    print(f"  mnmax = {self.mnmax}, mnmax_nyq = {self.mnmax_nyq}")
-    print(f"  asymmetry flag = {self.asym}")
-    print(f"  ns_full = {ns_full}")
-    print(f"  rmnc0 shape: {rmnc0.shape}")
     self.rmnc = strip_axis(rmnc0, ns_full)
     self.zmns = strip_axis(zmns0, ns_full)
     self.lmns = strip_axis(lmns0, ns_full)
@@ -185,9 +180,9 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
         self.lmnc = None
     # Copy Nyquist arrays, stripping axis
     def strip_axis_nyq(arr: _np.ndarray, ncols: int) -> jnp.ndarray:
-        if arr.ndim != 2 or arr.shape[1] != ncols:
-            raise ValueError("Input Nyquist array has wrong shape: expected (mnmax_nyq, ns)")
-        return jnp.asarray(arr[:, 1:], dtype=jnp.float64)
+        if arr.ndim != 2 or arr.shape[0] != ncols:
+            raise ValueError(f"strip_axis_nyq: input Nyquist array has wrong shape: expected array.shape[0] == ncols={ncols} got {arr.shape[0]}")
+        return jnp.asarray(arr[1:, :], dtype=jnp.float64)
     self.bmnc = strip_axis_nyq(bmnc0, ns_full)
     self.bsubumnc = strip_axis_nyq(bsubumnc0, ns_full)
     self.bsubvmnc = strip_axis_nyq(bsubvmnc0, ns_full)

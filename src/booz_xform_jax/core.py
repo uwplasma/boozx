@@ -312,7 +312,7 @@ class BoozXform:
         # choices follow the original C++ code which doubles the
         # resolution to avoid aliasing.
         ntheta = max(2 * (mtot + self.mboz), 64)
-        nzeta = max(2 * (ntot + self.nboz), 64)
+        nzeta  = max(2 * (ntot + self.nboz), 64)
         # Uniform grids on [0,2π)
         theta = jnp.linspace(0.0, 2.0 * jnp.pi, ntheta, endpoint=False)
         zeta = jnp.linspace(0.0, 2.0 * jnp.pi, nzeta, endpoint=False)
