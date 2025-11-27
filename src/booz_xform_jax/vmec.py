@@ -118,18 +118,6 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     # Store iota values as JAX array (drop axis)
     self.iota = jnp.asarray(iotas[1:], dtype=jnp.float64)
 
-    # Helper to strip the axis from 2D arrays and convert to JAX.
-    # VMEC stores these as (ns_full, mnmax). We want (mnmax, ns_in)
-    # internally, with the axis (s=0) removed.
-    def strip_axis(arr: _np.ndarray, nrows: int) -> jnp.ndarray:
-        if arr.ndim != 2 or arr.shape[0] != nrows:
-            raise ValueError(
-                f"strip_axis: expected arr.shape[0] == {nrows}, got {arr.shape}"
-            )
-        # arr: (ns_full, mnmax) → drop s=0 row → (ns_in, mnmax) → transpose
-        # to (mnmax, ns_in) for use in core.run
-        return jnp.asarray(arr[1:, :].T, dtype=jnp.float64)
-
     # Unpack mandatory arrays: order rmnc, rmns, zmnc, zmns, lmnc, lmns,
     # bmnc, bmns, bsubumnc, bsubumns, bsubvmnc, bsubvmns.
     (
@@ -279,9 +267,7 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     # For even m: average adjacent full‑grid points
     # For odd m: interpolate f/√s on the full grid and multiply by √s on the half grid.
 
-    # -------- NEW: fully vectorised interpolation over m --------
-    xm = _np.asarray(self.xm, dtype=int)  # m for each Fourier mode, length mnmax
-
+    # -------- fully vectorised interpolation over m --------
     even_mask = (xm % 2 == 0)
     odd_mask = ~even_mask
 
@@ -374,8 +360,6 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
         self.rmns = None
         self.zmnc = None
         self.lmnc = None
-    # Nyquist arrays: VMEC stores them as (ns_full, mnmax_nyq).
-    # Again, we want (mnmax_nyq, ns_in) internally.
     # ------------------------------------------------------------------
     # Nyquist arrays: canonicalize to (ns_full, mnmax_nyq)
     # SIMSOPT/C++ style is typically (mnmax_nyq, ns_full).
