@@ -1,9 +1,9 @@
 """Plotting utilities for the JAX version of the Boozer transform.
 
 This module provides convenience functions for visualising the output of
-the :class:`booz_xform_jax.booz_xform.BoozXform` class.  The API is
+the :class:`booz_xform_jax.booz_xform.Booz_xform` class.  The API is
 modelled on the plotting functions in the original ``booz_xform``
-package.  All functions accept either a :class:`BoozXform` instance
+package.  All functions accept either a :class:`Booz_xform` instance
 or the path to a ``boozmn`` file.  Matplotlib is used for creating
 figures.  Plotly support is not included in this version.
 
@@ -37,39 +37,39 @@ try:
 except ImportError as e:
     plt = None  # type: ignore
 
-# Import the BoozXform class from the core module.  This import is
+# Import the Booz_xform class from the core module.  This import is
 # deferred to support the modular structure of the package.
-from .core import BoozXform
+from .core import Booz_xform
 
 
-def handle_b_input(b: str | BoozXform) -> BoozXform:
-    """Convert input to a :class:`BoozXform` instance.
+def handle_b_input(b: str | Booz_xform) -> Booz_xform:
+    """Convert input to a :class:`Booz_xform` instance.
 
     Parameters
     ----------
-    b : str or BoozXform
+    b : str or Booz_xform
         If a string, it is interpreted as a path to a ``boozmn`` file
-        which will be read into a new :class:`BoozXform` instance.  If
-        an instance of :class:`BoozXform` is provided it is returned
+        which will be read into a new :class:`Booz_xform` instance.  If
+        an instance of :class:`Booz_xform` is provided it is returned
         unchanged.
 
     Returns
     -------
-    BoozXform
-        The corresponding BoozXform instance.
+    Booz_xform
+        The corresponding Booz_xform instance.
     """
     if isinstance(b, str):
-        bx = BoozXform()
+        bx = Booz_xform()
         bx.read_boozmn(b)
         return bx
-    elif isinstance(b, BoozXform):
+    elif isinstance(b, Booz_xform):
         return b
     else:
-        raise ValueError("Argument must be a path to a boozmn file or a BoozXform instance")
+        raise ValueError("Argument must be a path to a boozmn file or a Booz_xform instance")
 
 
 def surfplot(
-    b: str | BoozXform,
+    b: str | Booz_xform,
     js: int = 0,
     fill: bool = True,
     ntheta: int = 50,
@@ -89,8 +89,8 @@ def surfplot(
 
     Parameters
     ----------
-    b : str or BoozXform
-        The BoozXform instance to plot, or a filename of a ``boozmn`` file.
+    b : str or Booz_xform
+        The Booz_xform instance to plot, or a filename of a ``boozmn`` file.
     js : int, optional
         Index among the output surfaces to plot (default is 0).
     fill : bool, optional
@@ -146,7 +146,7 @@ def surfplot(
 
 
 def symplot(
-    b: str | BoozXform,
+    b: str | Booz_xform,
     max_m: int = 20,
     max_n: int = 20,
     ymin: float | None = None,
@@ -168,8 +168,8 @@ def symplot(
 
     Parameters
     ----------
-    b : str or BoozXform
-        The BoozXform instance to plot, or a filename of a ``boozmn`` file.
+    b : str or Booz_xform
+        The Booz_xform instance to plot, or a filename of a ``boozmn`` file.
     max_m : int
         Maximum poloidal mode number to include.
     max_n : int
@@ -306,7 +306,7 @@ def symplot(
 
 
 def modeplot(
-    b: str | BoozXform,
+    b: str | Booz_xform,
     nmodes: int = 10,
     ymin: float | None = None,
     sqrts: bool = False,
@@ -326,8 +326,8 @@ def modeplot(
 
     Parameters
     ----------
-    b : str or BoozXform
-        The BoozXform instance or path to a boozmn file.
+    b : str or Booz_xform
+        The Booz_xform instance or path to a boozmn file.
     nmodes : int, optional
         Number of modes to display.
     ymin : float, optional
@@ -395,7 +395,7 @@ def modeplot(
 
 
 def wireplot(
-    b: str | BoozXform,
+    b: str | Booz_xform,
     js: int | None = None,
     ntheta: int = 30,
     nphi: int = 80,
@@ -417,8 +417,8 @@ def wireplot(
 
     Parameters
     ----------
-    b : str or BoozXform
-        The BoozXform instance or path to a boozmn file.
+    b : str or Booz_xform
+        The Booz_xform instance or path to a boozmn file.
     js : int, optional
         The index among the output surfaces to plot.  If None, the
         outermost surface is selected.

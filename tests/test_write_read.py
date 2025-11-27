@@ -12,10 +12,10 @@ import os
 import numpy as np
 import unittest
 
-from booz_xform_jax import BoozXform
+from booz_xform_jax import Booz_xform
 
 # Alias for compatibility with the original test names
-Booz_xform = BoozXform
+Booz_xform = Booz_xform
 
 TEST_DIR = os.path.join(os.path.dirname(__file__), 'test_files')
 

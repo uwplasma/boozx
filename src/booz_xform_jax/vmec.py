@@ -1,14 +1,14 @@
 """VMEC input routines for the JAX implementation of ``booz_xform``.
 
 This module contains functions for loading data from VMEC output files
-and for initialising a :class:`~booz_xform_jax.core.BoozXform` instance
+and for initialising a :class:`~booz_xform_jax.core.Booz_xform` instance
 with that data.  The goal is to mimic the behaviour of the
 ``booz_xform`` C++ code while providing a Pythonic interface.
 
 The functions defined here operate on instances of
-:class:`~booz_xform_jax.core.BoozXform`.  They are not intended to be
+:class:`~booz_xform_jax.core.Booz_xform`.  They are not intended to be
 called standalone; instead, call the corresponding methods on a
-BoozXform object (``init_from_vmec`` and ``read_wout``), which
+Booz_xform object (``init_from_vmec`` and ``read_wout``), which
 delegate to these functions.
 """
 
@@ -35,7 +35,7 @@ except ImportError:
     netcdf_file = None  # pragma: no cover
 
 def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
-    """Initialise a :class:`~booz_xform_jax.core.BoozXform` instance with VMEC data.
+    """Initialise a :class:`~booz_xform_jax.core.Booz_xform` instance with VMEC data.
 
     This function accepts two calling conventions for compatibility
     with the original C++ ``init_from_vmec`` function:
@@ -59,7 +59,7 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
 
     Parameters
     ----------
-    self : BoozXform
+    self : Booz_xform
         The instance to initialise.
     *args : sequence
         Positional arguments following one of the two calling
@@ -80,7 +80,7 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     converted to ``jax.numpy.DeviceArray`` objects of dtype
     ``float64`` for computation; however, the radial coordinate array
     ``s_in`` is stored as a NumPy array so that it can be indexed
-    using Python lists in :meth:`~booz_xform_jax.core.BoozXform.run` and
+    using Python lists in :meth:`~booz_xform_jax.core.Booz_xform.run` and
     :func:`~booz_xform_jax.io_utils.read_boozmn`.
     """
     if len(args) == 0:
@@ -159,13 +159,49 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     bsubvmnc0 = _np.asarray(bsubvmnc0)
     bsubvmns0 = _np.asarray(bsubvmns0)
 
-    # VMEC arrays are (ns_full, mnmax).  The number of modes is the
-    # SECOND dimension, not the first.
-    self.mnmax = rmnc0.shape[1]
+    # Determine mnmax from rmnc0, allowing both (ns_full, mnmax)
+    # and (mnmax, ns_full) layouts.
+    if rmnc0.ndim != 2:
+        raise ValueError(f"rmnc0 must be 2D, got shape {rmnc0.shape}")
 
+    if rmnc0.shape[0] == ns_full and rmnc0.shape[1] != ns_full:
+        # rmnc0: (ns_full, mnmax)
+        mnmax = rmnc0.shape[1]
+    elif rmnc0.shape[1] == ns_full and rmnc0.shape[0] != ns_full:
+        # rmnc0: (mnmax, ns_full)
+        mnmax = rmnc0.shape[0]
+    else:
+        raise ValueError(
+            f"rmnc0 has unexpected shape {rmnc0.shape}; "
+            f"one dimension must equal ns={ns_full}"
+        )
+
+    self.mnmax = mnmax
     mnmax = self.mnmax
+
     asym = self.asym
     xm = _np.asarray(self.xm, dtype=int)  # needs self.xm set from read_wout
+
+    # ------------------------------------------------------------------
+    # Canonicalize full-grid arrays to shape (ns_full, mnmax)
+    # SIMSOPT typically gives (mnmax, ns_full); some readers use (ns_full, mnmax).
+    # We unify to (ns_full, mnmax) for the interpolation logic below.
+    # ------------------------------------------------------------------
+    if rmnc0.shape == (ns_full, mnmax):
+        rmnc_full = rmnc0
+        zmns_full = zmns0
+        rmns_full = rmns0
+        zmnc_full = zmnc0
+    elif rmnc0.shape == (mnmax, ns_full):
+        rmnc_full = rmnc0.T
+        zmns_full = zmns0.T
+        rmns_full = rmns0.T
+        zmnc_full = zmnc0.T
+    else:
+        raise ValueError(
+            f"rmnc0 has unexpected shape {rmnc0.shape}; "
+            f"expected (ns={ns_full}, mn={mnmax}) or (mn={mnmax}, ns={ns_full})"
+        )
 
     # --- Build full and half s grids like C++ ---
     if s_in is not None:
@@ -193,9 +229,10 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     # We build rmnc_half and zmns_half by interpolating between full-grid points, as in the C++ code.
     rmnc_half = _np.empty((mnmax, ns_in), dtype=float)
     zmns_half = _np.empty((mnmax, ns_in), dtype=float)
-    # For lambda harmonics (lmns and lmnc), the VMEC output already stores values on the half grid,
-    # so we do NOT perform radial interpolation. Instead we drop the axis and transpose directly.
-    # See C++ init_from_vmec.cpp lines ~100-150 for reference.
+
+    # For lambda harmonics (lmns and lmnc), the VMEC output already stores values on the
+    # half grid, so we do NOT perform radial interpolation. Instead, we drop the axis
+    # entry and reshape to (mnmax, ns_in), mimicking the original C++ code.
     lmns_half = _np.empty((mnmax, ns_in), dtype=float)
     if asym:
         rmns_half = _np.empty((mnmax, ns_in), dtype=float)
@@ -204,34 +241,43 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     else:
         rmns_half = zmnc_half = lmnc_half = None
 
-    # Pre-compute the non-interpolated lambda values: drop axis for lmns0 and (if asym) lmnc0.
-    # VMEC arrays are stored as (ns_full, mnmax). We drop the first radial point and transpose.
-    lmns_half[:, :] = lmns0[1:, :].T  # (ns_in, mnmax) -> (mnmax, ns_in)
-    if asym:
-        lmnc_half[:, :] = lmnc0[1:, :].T # (ns_in, mnmax) -> (mnmax, ns_in)
+    def copy_half_mesh(arr: _np.ndarray, name: str) -> _np.ndarray:
+        """Convert VMEC half-mesh array to (mnmax, ns_in) by dropping the axis.
+
+        We support both (ns_full, mnmax) and (mnmax, ns_full) layouts,
+        mirroring the C++ Booz_xform::init_from_vmec behavior where
+        lmns0 is (mnmax, ns) and we keep columns j=1..ns-1.
+        """
+        arr = _np.asarray(arr)
+        if arr.ndim != 2:
+            raise ValueError(f"{name} must be 2D, got shape {arr.shape}")
+
+        # Case 1: (radius, mode) = (ns_full, mnmax)
+        if arr.shape == (ns_full, mnmax):
+            # Drop axis row, then transpose → (ns_in, mnmax) → (mnmax, ns_in)
+            return arr[1:, :].T
+
+        # Case 2: (mode, radius) = (mnmax, ns_full)
+        if arr.shape == (mnmax, ns_full):
+            # Drop axis column → (mnmax, ns_in)
+            return arr[:, 1:]
+
+        raise ValueError(
+            f"{name} has unexpected shape {arr.shape}; "
+            f"expected (ns={ns_full}, mn={mnmax}) or (mn={mnmax}, ns={ns_full})"
+        )
+
+
+    # Drop axis and reshape lmns (half mesh)
+    lmns_half[:, :] = copy_half_mesh(lmns0, "lmns0")
+
+    # Asymmetric lambda (if present) is also on the half mesh.
+    if asym and lmnc0 is not None and lmnc0.size > 0:
+        lmnc_half[:, :] = copy_half_mesh(lmnc0, "lmnc0")
 
     # Interpolate RMNC and ZMNS from full grid (ns_full) to half grid (ns_in).
     # For even m: average adjacent full‑grid points
     # For odd m: interpolate f/√s on the full grid and multiply by √s on the half grid.
-    # --- Radial interpolation for R and Z on half grid: rmnc, zmns (+ asym parts) ---
-    # rmnc0, zmns0, rmns0, zmnc0 currently have shape (ns_full, mnmax)
-    # We build rmnc_half and zmns_half by interpolating between full-grid points, as in the C++ code.
-    rmnc_half = _np.empty((mnmax, ns_in), dtype=float)
-    zmns_half = _np.empty((mnmax, ns_in), dtype=float)
-    # For lambda harmonics (lmns and lmnc), the VMEC output already stores values on the half grid,
-    # so we do NOT perform radial interpolation. Instead we drop the axis and transpose directly.
-    lmns_half = _np.empty((mnmax, ns_in), dtype=float)
-    if asym:
-        rmns_half = _np.empty((mnmax, ns_in), dtype=float)
-        zmnc_half = _np.empty((mnmax, ns_in), dtype=float)
-        lmnc_half = _np.empty((mnmax, ns_in), dtype=float)
-    else:
-        rmns_half = zmnc_half = lmnc_half = None
-
-    # Pre-compute the non-interpolated lambda values: drop axis for lmns0 and (if asym) lmnc0.
-    lmns_half[:, :] = lmns0[1:, :].T  # (ns_in, mnmax) -> (mnmax, ns_in)
-    if asym:
-        lmnc_half[:, :] = lmnc0[1:, :].T
 
     # -------- NEW: fully vectorised interpolation over m --------
     xm = _np.asarray(self.xm, dtype=int)  # m for each Fourier mode, length mnmax
@@ -242,32 +288,33 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
     even_idx = _np.nonzero(even_mask)[0]
     odd_idx = _np.nonzero(odd_mask)[0]
 
-    # Even m: simple average of adjacent full-grid points
+    # Even m: simple average of adjacent full-grid points\
     if even_idx.size > 0:
         rmnc_half[even_idx, :] = 0.5 * (
-            rmnc0[:-1, even_idx] + rmnc0[1:, even_idx]
+            rmnc_full[:-1, even_idx] + rmnc_full[1:, even_idx]
         ).T
         zmns_half[even_idx, :] = 0.5 * (
-            zmns0[:-1, even_idx] + zmns0[1:, even_idx]
+            zmns_full[:-1, even_idx] + zmns_full[1:, even_idx]
         ).T
         if asym:
             rmns_half[even_idx, :] = 0.5 * (
-                rmns0[:-1, even_idx] + rmns0[1:, even_idx]
+                rmns_full[:-1, even_idx] + rmns_full[1:, even_idx]
             ).T
             zmnc_half[even_idx, :] = 0.5 * (
-                zmnc0[:-1, even_idx] + zmnc0[1:, even_idx]
+                zmnc_full[:-1, even_idx] + zmnc_full[1:, even_idx]
             ).T
+
 
     # Odd m: interpolate f/√s on the full grid and multiply by √s on the half grid.
     if odd_idx.size > 0:
         # shapes: (ns_in, n_odd)
         rmnc_odd = 0.5 * (
-            (rmnc0[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
-            (rmnc0[1:,  odd_idx] / sqrt_s_full[1:,  None])
+            (rmnc_full[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
+            (rmnc_full[1:,  odd_idx] / sqrt_s_full[1:,  None])
         ) * sqrt_s_half[:, None]
         zmns_odd = 0.5 * (
-            (zmns0[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
-            (zmns0[1:,  odd_idx] / sqrt_s_full[1:,  None])
+            (zmns_full[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
+            (zmns_full[1:,  odd_idx] / sqrt_s_full[1:,  None])
         ) * sqrt_s_half[:, None]
 
         rmnc_half[odd_idx, :] = rmnc_odd.T
@@ -275,12 +322,12 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
 
         if asym:
             rmns_odd = 0.5 * (
-                (rmns0[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
-                (rmns0[1:,  odd_idx] / sqrt_s_full[1:,  None])
+                (rmns_full[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
+                (rmns_full[1:,  odd_idx] / sqrt_s_full[1:,  None])
             ) * sqrt_s_half[:, None]
             zmnc_odd = 0.5 * (
-                (zmnc0[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
-                (zmnc0[1:,  odd_idx] / sqrt_s_full[1:,  None])
+                (zmnc_full[:-1, odd_idx] / sqrt_s_full[:-1, None]) +
+                (zmnc_full[1:,  odd_idx] / sqrt_s_full[1:,  None])
             ) * sqrt_s_half[:, None]
 
             rmns_half[odd_idx, :] = rmns_odd.T
@@ -289,14 +336,13 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
         # m = 1 special axis extrapolation (for all mn with m==1)
         axis_idx = _np.nonzero(xm == 1)[0]
         if axis_idx.size > 0:
-            # shape (axis_idx.size,)
             rmnc_axis = (
-                1.5 * rmnc0[1, axis_idx] / sqrt_s_full[1]
-                - 0.5 * rmnc0[2, axis_idx] / sqrt_s_full[2]
+                1.5 * rmnc_full[1, axis_idx] / sqrt_s_full[1]
+                - 0.5 * rmnc_full[2, axis_idx] / sqrt_s_full[2]
             ) * sqrt_s_half[0]
             zmns_axis = (
-                1.5 * zmns0[1, axis_idx] / sqrt_s_full[1]
-                - 0.5 * zmns0[2, axis_idx] / sqrt_s_full[2]
+                1.5 * zmns_full[1, axis_idx] / sqrt_s_full[1]
+                - 0.5 * zmns_full[2, axis_idx] / sqrt_s_full[2]
             ) * sqrt_s_half[0]
 
             rmnc_half[axis_idx, 0] = rmnc_axis
@@ -304,12 +350,12 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
 
             if asym:
                 rmns_axis = (
-                    1.5 * rmns0[1, axis_idx] / sqrt_s_full[1]
-                    - 0.5 * rmns0[2, axis_idx] / sqrt_s_full[2]
+                    1.5 * rmns_full[1, axis_idx] / sqrt_s_full[1]
+                    - 0.5 * rmns_full[2, axis_idx] / sqrt_s_full[2]
                 ) * sqrt_s_half[0]
                 zmnc_axis = (
-                    1.5 * zmnc0[1, axis_idx] / sqrt_s_full[1]
-                    - 0.5 * zmnc0[2, axis_idx] / sqrt_s_full[2]
+                    1.5 * zmnc_full[1, axis_idx] / sqrt_s_full[1]
+                    - 0.5 * zmnc_full[2, axis_idx] / sqrt_s_full[2]
                 ) * sqrt_s_half[0]
 
                 rmns_half[axis_idx, 0] = rmns_axis
@@ -330,24 +376,55 @@ def init_from_vmec(self, *args, s_in: Optional[_np.ndarray] = None) -> None:
         self.lmnc = None
     # Nyquist arrays: VMEC stores them as (ns_full, mnmax_nyq).
     # Again, we want (mnmax_nyq, ns_in) internally.
-    self.mnmax_nyq = bmnc0.shape[1]
+    # ------------------------------------------------------------------
+    # Nyquist arrays: canonicalize to (ns_full, mnmax_nyq)
+    # SIMSOPT/C++ style is typically (mnmax_nyq, ns_full).
+    # ------------------------------------------------------------------
+    if bmnc0.ndim != 2:
+        raise ValueError(f"bmnc0 must be 2D, got shape {bmnc0.shape}")
 
-    def strip_axis_nyq(arr: _np.ndarray, nrows: int) -> jnp.ndarray:
-        if arr.ndim != 2 or arr.shape[0] != nrows:
+    if bmnc0.shape[0] == ns_full and bmnc0.shape[1] != ns_full:
+        # (ns_full, mnmax_nyq)
+        mnmax_nyq = bmnc0.shape[1]
+        bmnc_full = bmnc0
+        bsubumnc_full = bsubumnc0
+        bsubvmnc_full = bsubvmnc0
+        bmns_full = bmns0
+        bsubumns_full = bsubumns0
+        bsubvmns_full = bsubvmns0
+    elif bmnc0.shape[1] == ns_full and bmnc0.shape[0] != ns_full:
+        # (mnmax_nyq, ns_full) → transpose
+        mnmax_nyq = bmnc0.shape[0]
+        bmnc_full = bmnc0.T
+        bsubumnc_full = bsubumnc0.T
+        bsubvmnc_full = bsubvmnc0.T
+        bmns_full = bmns0.T
+        bsubumns_full = bsubumns0.T
+        bsubvmns_full = bsubvmns0.T
+    else:
+        raise ValueError(
+            f"bmnc0 has unexpected shape {bmnc0.shape}; "
+            f"one dimension must equal ns={ns_full}"
+        )
+
+    self.mnmax_nyq = mnmax_nyq
+
+    def strip_axis_nyq(arr_full: _np.ndarray, name: str) -> jnp.ndarray:
+        if arr_full.ndim != 2 or arr_full.shape[0] != ns_full:
             raise ValueError(
-                f"strip_axis_nyq: expected arr.shape[0] == {nrows}, got {arr.shape}"
+                f"strip_axis_nyq: {name} expected shape (ns={ns_full}, *), got {arr_full.shape}"
             )
-        # arr: (ns_full, mnmax_nyq) → drop s=0 row → (ns_in, mnmax_nyq)
+        # arr_full: (ns_full, mnmax_nyq) → drop s=0 row → (ns_in, mnmax_nyq)
         # → transpose to (mnmax_nyq, ns_in).
-        return jnp.asarray(arr[1:, :].T, dtype=jnp.float64)
+        return jnp.asarray(arr_full[1:, :].T, dtype=jnp.float64)
 
-    self.bmnc = strip_axis_nyq(bmnc0, ns_full)
-    self.bsubumnc = strip_axis_nyq(bsubumnc0, ns_full)
-    self.bsubvmnc = strip_axis_nyq(bsubvmnc0, ns_full)
+    self.bmnc = strip_axis_nyq(bmnc_full, "bmnc0")
+    self.bsubumnc = strip_axis_nyq(bsubumnc_full, "bsubumnc0")
+    self.bsubvmnc = strip_axis_nyq(bsubvmnc_full, "bsubvmnc0")
     if self.asym:
-        self.bmns = strip_axis_nyq(bmns0, ns_full)
-        self.bsubumns = strip_axis_nyq(bsubumns0, ns_full)
-        self.bsubvmns = strip_axis_nyq(bsubvmns0, ns_full)
+        self.bmns = strip_axis_nyq(bmns_full, "bmns0")
+        self.bsubumns = strip_axis_nyq(bsubumns_full, "bsubumns0")
+        self.bsubvmns = strip_axis_nyq(bsubvmns_full, "bsubvmns0")
     else:
         self.bmns = None
         self.bsubumns = None
@@ -415,7 +492,7 @@ def read_wout(self, filename: str, flux: bool = False) -> None:
 
     Parameters
     ----------
-    self : BoozXform
+    self : Booz_xform
         The instance to populate.
     filename : str
         Path to a VMEC wout NetCDF file.

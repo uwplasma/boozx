@@ -36,7 +36,7 @@ from typing import Sequence
 
 import matplotlib.pyplot as plt
 
-from booz_xform_jax.core import BoozXform
+from booz_xform_jax.core import Booz_xform
 from booz_xform_jax import plots
 
 
@@ -100,7 +100,7 @@ def main() -> None:
 
     # We will reuse the *same* VMEC data for each resolution, so we read
     # the wout file just once and reconfigure (mboz, nboz) in-place.
-    bx = BoozXform()
+    bx = Booz_xform()
     bx.read_wout(str(wout_path), flux=False)
     bx.register_surfaces(args.s)
 

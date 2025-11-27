@@ -1,7 +1,7 @@
 """
 Core classes for the JAX implementation of ``booz_xform``.
 
-This module defines the :class:`BoozXform` class, which is the primary
+This module defines the :class:`Booz_xform` class, which is the primary
 interface for converting Fourier data from a VMEC equilibrium
 (spectral representation in VMEC coordinates) to a spectral
 representation in Boozer coordinates.
@@ -78,7 +78,7 @@ Public API
 
 The external API mirrors the original BOOZ_XFORM library:
 
-  * Create an instance of :class:`BoozXform`.
+  * Create an instance of :class:`Booz_xform`.
   * Call :meth:`read_wout` or :meth:`init_from_vmec` to populate
     VMEC data.
   * Optionally call :meth:`register_surfaces` to select a subset of
@@ -145,7 +145,7 @@ def _init_trig(
     theta_grid, zeta_grid :
         1D arrays of length ``n_theta_zeta`` containing the flattened
         tensor-product grid in angles. Typically these are produced by
-        :meth:`BoozXform._setup_grids` via
+        :meth:`Booz_xform._setup_grids` via
 
             theta_grid = repeat(theta_vals, nzeta_full)
             zeta_grid  = tile(zeta_vals,  nu3_b)
@@ -199,22 +199,22 @@ def _init_trig(
 
 
 # -----------------------------------------------------------------------------
-# Main BoozXform class
+# Main Booz_xform class
 # -----------------------------------------------------------------------------
 
 
 @dataclass
-class BoozXform:
+class Booz_xform:
     """
     Class implementing the Boozer coordinate transformation using JAX.
 
-    Instances of :class:`BoozXform` encapsulate all data required to
+    Instances of :class:`Booz_xform` encapsulate all data required to
     convert the spectral representation of a VMEC equilibrium (in
     VMEC angles) to a spectral representation in Boozer coordinates.
 
     Typical usage
     -------------
-    >>> bx = BoozXform()
+    >>> bx = Booz_xform()
     >>> bx.read_wout("wout_mycase.nc", flux=True)   # or init_from_vmec(...)
     >>> bx.register_surfaces([0.2, 0.5, 0.8])       # select surfaces in s-space
     >>> bx.run()

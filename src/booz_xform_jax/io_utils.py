@@ -4,9 +4,9 @@ This module provides functions to read from and write to the NetCDF
 formats used by the original ``booz_xform`` code.  In particular it
 handles the ``boozmn`` file format, which stores Boozer‐coordinate
 Fourier spectra and associated radial profiles.  These functions
-operate on :class:`~booz_xform_jax.core.BoozXform` instances and are
-used by the methods :meth:`booz_xform_jax.core.BoozXform.write_boozmn`
-and :meth:`booz_xform_jax.core.BoozXform.read_boozmn`.
+operate on :class:`~booz_xform_jax.core.Booz_xform` instances and are
+used by the methods :meth:`booz_xform_jax.core.Booz_xform.write_boozmn`
+and :meth:`booz_xform_jax.core.Booz_xform.read_boozmn`.
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ def write_boozmn(self, filename: str) -> None:
     writes the essential information required to reconstruct the Boozer
     harmonics: the mode definitions, radial profiles, and spectral
     coefficients.  If the instance was initialised from a VMEC
-    equilibrium and :meth:`booz_xform_jax.core.BoozXform.run` has been
+    equilibrium and :meth:`booz_xform_jax.core.Booz_xform.run` has been
     called, this routine will create a NetCDF file that can be read by
     the original ``booz_xform`` or by :func:`read_boozmn` below.
 
     Parameters
     ----------
-    self : BoozXform
+    self : Booz_xform
         The instance containing the results of the Boozer transform.
     filename : str
         Path of the output NetCDF file.
@@ -184,7 +184,7 @@ def write_boozmn(self, filename: str) -> None:
 def read_boozmn(self, filename: str) -> None:
     """Read Boozer Fourier data from a ``boozmn`` NetCDF file.
 
-    This routine populates a :class:`~booz_xform_jax.core.BoozXform`
+    This routine populates a :class:`~booz_xform_jax.core.Booz_xform`
     instance with data from a file produced by the original
     ``booz_xform`` program or by :func:`write_boozmn`.  It reads the
     mode definitions, radial profiles and spectral arrays, reorienting
@@ -193,7 +193,7 @@ def read_boozmn(self, filename: str) -> None:
 
     Parameters
     ----------
-    self : BoozXform
+    self : Booz_xform
         The instance to populate.
     filename : str
         Path to a ``boozmn`` NetCDF file.

@@ -34,7 +34,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from booz_xform_jax.core import BoozXform
+from booz_xform_jax.core import Booz_xform
 from booz_xform_jax import plots
 
 
@@ -97,7 +97,7 @@ def main() -> None:
     print(f"[example_li383_wireframe] Using wout file: {wout_path}")
 
     # Compute Boozer harmonics on the requested surface.
-    bx = BoozXform()
+    bx = Booz_xform()
     bx.read_wout(str(wout_path), flux=False)
     bx.register_surfaces(args.s)
     bx.verbose = 0

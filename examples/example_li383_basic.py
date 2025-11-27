@@ -32,7 +32,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from booz_xform_jax.core import BoozXform
+from booz_xform_jax.core import Booz_xform
 from booz_xform_jax import plots
 
 
@@ -99,9 +99,9 @@ def main() -> None:
     print(f"[example_li383_basic] Using wout file: {wout_path}")
 
     # ------------------------------------------------------------------
-    # 1) Read VMEC data and initialise the BoozXform instance
+    # 1) Read VMEC data and initialise the Booz_xform instance
     # ------------------------------------------------------------------
-    bx = BoozXform()
+    bx = Booz_xform()
     # The 'flux=True' flag also reads the flux profiles (phi, phip, etc.)
     bx.read_wout(str(wout_path), flux=True)
 

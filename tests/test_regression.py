@@ -21,10 +21,10 @@ import unittest
 import numpy as np
 from netCDF4 import Dataset
 
-from booz_xform_jax import BoozXform
+from booz_xform_jax import Booz_xform
 
 # Provide backwards compatibility alias
-Booz_xform = BoozXform
+Booz_xform = Booz_xform
 
 TEST_DIR = os.path.join(os.path.dirname(__file__), 'test_files')
 

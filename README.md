@@ -60,13 +60,13 @@ This repository is not a fork of the C++ implementation but a **from-scratch re-
   - Mode lists, symmetry conventions, and normalisation factors are chosen to match the reference C++/Fortran behaviour as closely as possible.
 
 - **Differentiable Boozer transform**
-  - The core `BoozXform.run()` method is written in AD-friendly JAX primitives.
+  - The core `Booz_xform.run()` method is written in AD-friendly JAX primitives.
   - You can, in principle, differentiate \|B\| and Boozer-space diagnostics with respect to VMEC input data passed in as JAX arrays (e.g., surface-shape Fourier coefficients), enabling:
     - gradient-based stellarator optimisation,
     - embedding the transform into end-to-end differentiable pipelines (e.g., joint equilibrium + Boozer-property optimisation).
 
 - **Pure Python I/O and plotting**
-  - `vmec.py`: read VMEC `wout` files and populate the `BoozXform` instance.
+  - `vmec.py`: read VMEC `wout` files and populate the `Booz_xform` instance.
   - `io_utils.py`: read/write `boozmn` files in a NetCDF format compatible with the C++ code where possible.
   - `plots.py`: quick-look diagnostics (surfplot, symplot, modeplot, wireplot) using Matplotlib.
 
@@ -122,7 +122,7 @@ The core physics is the same as in the original BOOZ\_XFORM codes. Very briefly:
 
 7. **Collect profiles and surface labels**  
    - Extract Boozer I(ψ), G(ψ) from the m=n=0 Nyquist mode.
-   - Store the selected surfaces and Boozer spectra on the `BoozXform` instance for further analysis and plotting.
+   - Store the selected surfaces and Boozer spectra on the `Booz_xform` instance for further analysis and plotting.
 
 The JAX implementation keeps this structure but collapses many of the inner loops into high-level array operations and `einsum` contractions, which map efficiently onto CPU or GPU backends.
 
@@ -175,10 +175,10 @@ python -c "import booz_xform_jax; print(booz_xform_jax.__version__)"
 The typical workflow mirrors the C++/Python BOOZ\_XFORM API:
 
 ```python
-from booz_xform_jax.core import BoozXform
+from booz_xform_jax.core import Booz_xform
 
 # Create a transform object
-bx = BoozXform()
+bx = Booz_xform()
 
 # Read VMEC wout file (NetCDF)
 bx.read_wout("tests/test_files/wout_li383_1.4m.nc", flux=True)
@@ -211,10 +211,10 @@ After `run()`, the object `bx` contains:
 The `booz_xform_jax.plots` module reproduces some of the classic BOOZ\_XFORM plots.
 
 ```python
-from booz_xform_jax.core import BoozXform
+from booz_xform_jax.core import Booz_xform
 from booz_xform_jax import plots
 
-bx = BoozXform()
+bx = Booz_xform()
 bx.read_wout("tests/test_files/wout_li383_1.4m.nc", flux=True)
 bx.register_surfaces([0, 10, 20, 30])
 bx.run()
@@ -239,7 +239,7 @@ These examples correspond closely to the documentation and figures in:
 
 ## 6. JAX, JIT, and autodiff
 
-The `BoozXform.run()` method is written purely in JAX primitives (`jax.numpy`, `einsum`, etc.), but **the method itself is not jitted by default**. This is deliberate:
+The `Booz_xform.run()` method is written purely in JAX primitives (`jax.numpy`, `einsum`, etc.), but **the method itself is not jitted by default**. This is deliberate:
 
 - For small or medium problems (e.g. single equilibrium, modest resolution), Python-level overhead is small and JIT compile times can dominate.
 - For large or repeated runs (e.g., scanning many equilibria or surfaces), you may want to wrap the core transform in `jax.jit` or `jax.vmap` yourself, tuned to your workflow.
@@ -248,9 +248,9 @@ A typical pattern for large-scale or differentiable use-cases:
 
 ```python
 import jax
-from booz_xform_jax.core import BoozXform
+from booz_xform_jax.core import Booz_xform
 
-bx = BoozXform()
+bx = Booz_xform()
 bx.read_wout("tests/test_files/wout_li383_1.4m.nc", flux=True)
 
 # Suppose you have a function that:
@@ -281,7 +281,7 @@ def booz_transform(vmec_data, config):
     return booz_spectra
 ```
 
-The current `BoozXform` class is structured so that this refactoring is straightforward: most heavy math is already in pure JAX.
+The current `Booz_xform` class is structured so that this refactoring is straightforward: most heavy math is already in pure JAX.
 
 ---
 

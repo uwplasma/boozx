@@ -6,7 +6,7 @@ This test mirrors ``tests/test_plots.py`` from the original project.  It
 exercises the four plotting routines (``surfplot``, ``symplot``,
 ``modeplot`` and ``wireplot``) in a non‑interactive manner.  The goal is
 to ensure that these functions execute without raising exceptions when
-supplied either a filename or a pre‑computed ``BoozXform`` instance.
+supplied either a filename or a pre‑computed ``Booz_xform`` instance.
 Because ``plt.show()`` is not called, no figures are displayed on
 screen.
 """
@@ -34,9 +34,9 @@ class PlotTest(unittest.TestCase):
                     # Supply a filename string
                     b = os.path.join(TEST_DIR, f'boozmn_{config}.nc')
                 else:
-                    # Supply a BoozXform instance used to drive the transformation
+                    # Supply a Booz_xform instance used to drive the transformation
                     wout_filename = os.path.join(TEST_DIR, f'wout_{config}.nc')
-                    b = bx.BoozXform()
+                    b = bx.Booz_xform()
                     b.read_wout(wout_filename)
                     b.compute_surfs = [2, 15]
                     b.run()
